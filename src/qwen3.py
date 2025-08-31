@@ -1,10 +1,11 @@
 def chat_with_qwen3(messages, model=None, tokenizer=None, max_new_tokens=1024):
     """
     Memory-efficient version: Use Qwen3's chat template to generate a response, returning both thinking content 
-    and the final answer, along with token probabilities for each step.
+    and the final answer, along with token-probability pairs for each step.
     messages: list of dicts, e.g. [{"role": "user", "content": "Hello!"}]
     Returns:
-        thinking_content, response_content, thinking_probs, response_probs
+        thinking_content, response_content, thinking_token_probs, response_token_probs
+        where thinking_token_probs and response_token_probs are lists of (token, probability) tuples
     """
     import torch
     import torch.nn.functional as F
@@ -49,18 +50,21 @@ def chat_with_qwen3(messages, model=None, tokenizer=None, max_new_tokens=1024):
         think_end_index = 0  # No thinking section found
     
     # Process tokens and probabilities memory-efficiently
-    thinking_probs = []
-    response_probs = []
+    thinking_token_probs = []
+    response_token_probs = []
     
-    for i, (token_id, score) in enumerate(zip(output_ids, scores)):
+    # Batch decode tokens for efficiency
+    all_tokens = [tokenizer.decode([token_id], skip_special_tokens=False) for token_id in output_ids]
+    
+    for i, (token_id, token_text, score) in enumerate(zip(output_ids, all_tokens, scores)):
         # Convert logits to probabilities and extract only the probability of the generated token
         with torch.no_grad():
             prob = F.softmax(score[0], dim=-1)[token_id].cpu().item()
         
         if i < think_end_index:
-            thinking_probs.append(prob)
+            thinking_token_probs.append((token_text, prob))
         else:
-            response_probs.append(prob)
+            response_token_probs.append((token_text, prob))
         
         # Clear score tensor to free memory immediately
         del score
@@ -76,7 +80,7 @@ def chat_with_qwen3(messages, model=None, tokenizer=None, max_new_tokens=1024):
     del gen_out, scores, output_ids
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
     
-    return thinking_content, response_content, thinking_probs, response_probs
+    return thinking_content, response_content, thinking_token_probs, response_token_probs
 
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -90,8 +94,29 @@ MODEL_LOCAL_PATH = os.path.abspath(os.path.normpath("./models/qwen3"))
 
 def load_qwen3_model():
     print(f"Loading model and tokenizer from local path: '{MODEL_LOCAL_PATH}'...")
+    
+    # Check available devices
+    import torch
+    if torch.cuda.is_available():
+        print(f"CUDA available: {torch.cuda.device_count()} GPU(s)")
+        for i in range(torch.cuda.device_count()):
+            print(f"  GPU {i}: {torch.cuda.get_device_name(i)}")
+            print(f"  Memory: {torch.cuda.get_device_properties(i).total_memory / 1024**3:.1f} GB")
+    else:
+        print("WARNING: CUDA not available, using CPU (will be very slow)")
+    
     tokenizer = AutoTokenizer.from_pretrained(MODEL_LOCAL_PATH)
-    model = AutoModelForCausalLM.from_pretrained(MODEL_LOCAL_PATH, torch_dtype=torch.float16, device_map="auto")
-    print("Model and tokenizer loaded successfully from local files.")
+    
+    # Load with optimizations
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_LOCAL_PATH, 
+        torch_dtype=torch.float16, 
+        device_map="auto",
+        low_cpu_mem_usage=True,  # Reduce CPU memory usage during loading
+        trust_remote_code=True   # Allow custom model code
+    )
+    
+    print(f"Model loaded successfully on device: {model.device}")
+    print(f"Model dtype: {model.dtype}")
     return model, tokenizer
 
