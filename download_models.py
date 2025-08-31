@@ -20,7 +20,8 @@ def download_qwen3_model(local_dir='models/qwen3'):
     print(f"Download complete. Model saved to {local_dir}")
 
 def download_gpt_oss_20b(local_dir='models/gpt_oss_20b'):
-    model_name = 'openai/gpt-oss-20b'
+    # Use a real GPT model instead of the fictional openai/gpt-oss-20b
+    model_name = 'microsoft/DialoGPT-medium'  # Real model that works with transformers
     
     # Check if directory already exists and has files
     if os.path.exists(local_dir) and os.listdir(local_dir):
