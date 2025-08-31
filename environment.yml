@@ -1,0 +1,33 @@
+## To create this environment, run:
+# conda env create -f environment.yml
+name: consistency
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - jupyter
+  - ipykernel
+  - transformers
+  - pip:
+      - openai
+      - huggingface-hub
+      - safetensors
+      - torch
+      - sentencepiece
+      - ollama
+      - fastapi
+      - uvicorn
+      - httpx
+      - rich
+      - pytest
+      - tqdm
+      - pyyaml
+      - tokenizers
+  - accelerate
