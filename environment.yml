@@ -29,5 +29,5 @@ dependencies:
       - pytest
       - tqdm
       - pyyaml
-      - tokenizers
+  - tokenizers>=0.21,<0.22
   - accelerate
